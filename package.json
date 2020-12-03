@@ -1,0 +1,8 @@
+{
+  "name": "worker-echo-perf",
+  "version": "0.0.1",
+  "main": "main.js",
+  "dependencies": {
+    "benchmark": "^2.1.4"
+  }
+}
