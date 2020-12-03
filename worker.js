@@ -1,8 +1,10 @@
 onmessage = (e) => {
-  const data = e.data;
+  const {data} = e;
+  const id = data[0];
+  const msg = data[1];
   if (data instanceof ArrayBuffer) {
-    e.ports[0].postMessage(data, [data]);
+    e.source.postMessage([id, msg], [data]);
   } else {
-    e.ports[0].postMessage(data);
+    e.source.postMessage([id, msg]);
   }
 };

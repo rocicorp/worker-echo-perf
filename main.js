@@ -24,13 +24,15 @@ function registerServiceWorker() {
 
 let w; // = new Worker("worker.js", {type: "module"});
 
+let counter = 0;
+const callbacks = new Map();
+
 function send(worker, msg, transferable) {
   return new Promise((resolve, reject) => {
-    const c = new MessageChannel();
-    c.port1.onmessage = (e) => {
-      resolve(e.data);
-    };
-    worker.postMessage(msg, transferable ? [c.port2, transferable] : [c.port2]);
+    const id = counter++;
+    callbacks.set(id, resolve);
+    const data = [id, msg];
+    worker.postMessage(data, transferable ? [transferable] : undefined);
   });
 }
 
@@ -110,6 +112,15 @@ async function main() {
   const reg = await registerServiceWorker();
   w = findServiceWorker(reg);
   // w = new Worker("worker.js");
+  navigator.serviceWorker.onmessage = (e) => {
+    const id = e.data[0];
+    const value = e.data[1];
+    const callback = callbacks.get(id);
+    if (callback) {
+      callback(value);
+      callbacks.delete(id);
+    }
+  };
 
   await send(w, 1);
   log("Worker up and functional. Running perf tests...");
