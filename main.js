@@ -56,6 +56,8 @@ function getResolver() {
   return {promise, resolve};
 }
 
+const ITERATIONS = 100;
+
 async function runBenchmarks(w, workerKind, onMessageTarget) {
   const suite = new Benchmark.Suite();
 
@@ -63,7 +65,7 @@ async function runBenchmarks(w, workerKind, onMessageTarget) {
     suite.add(
       name,
       async (deferred) => {
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < ITERATIONS; i++) {
           await fn();
         }
         deferred.resolve();
@@ -110,6 +112,7 @@ async function runBenchmarks(w, workerKind, onMessageTarget) {
   log(`${workerKind} up and functional. Running perf tests...`);
 
   suite.on("cycle", (event) => {
+    event.target.hz *= ITERATIONS;
     log(String(event.target));
   });
 
