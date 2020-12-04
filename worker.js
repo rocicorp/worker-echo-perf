@@ -3,25 +3,17 @@ if (
   self instanceof SharedWorkerGlobalScope
 ) {
   self.onconnect = (e) => {
-    const port = e.ports[0];
-    port.onmessage = (e) => handleOnMessage(e, port);
+    e.ports[0].onmessage = handleOnMessage;
   };
-} else if (
-  typeof ServiceWorkerGlobalScope === "function" &&
-  self instanceof ServiceWorkerGlobalScope
-) {
-  self.onmessage = (e) => handleOnMessage(e, e.source);
 } else {
-  self.onmessage = (e) => handleOnMessage(e, self);
+  self.onmessage = handleOnMessage;
 }
 
-function handleOnMessage(e, port) {
+function handleOnMessage(e) {
   const {data} = e;
-  const id = data[0];
-  const msg = data[1];
   if (data instanceof ArrayBuffer) {
-    port.postMessage([id, msg], [data]);
+    e.ports[0].postMessage(data, [data]);
   } else {
-    port.postMessage([id, msg]);
+    e.ports[0].postMessage(data);
   }
 }

@@ -22,17 +22,13 @@ function registerServiceWorker() {
   });
 }
 
-let w; // = new Worker("worker.js", {type: "module"});
-
-let counter = 0;
-const callbacks = new Map();
-
 function send(worker, msg, transferable) {
   return new Promise((resolve, reject) => {
-    const id = counter++;
-    callbacks.set(id, resolve);
-    const data = [id, msg];
-    worker.postMessage(data, transferable ? [transferable] : undefined);
+    const {port1, port2} = new MessageChannel();
+    port1.onmessage = (e) => {
+      resolve(e.data);
+    };
+    worker.postMessage(msg, transferable ? [port2, transferable] : [port2]);
   });
 }
 
@@ -61,16 +57,6 @@ function getResolver() {
 }
 
 async function runBenchmarks(w, workerKind, onMessageTarget) {
-  onMessageTarget.onmessage = (e) => {
-    const id = e.data[0];
-    const value = e.data[1];
-    const callback = callbacks.get(id);
-    if (callback) {
-      callback(value);
-      callbacks.delete(id);
-    }
-  };
-
   const suite = new Benchmark.Suite();
 
   function addAsync(name, fn) {
@@ -139,16 +125,12 @@ async function runBenchmarks(w, workerKind, onMessageTarget) {
 }
 
 async function main() {
-  let onMessageTarget;
-
   // Service worker
   {
     const workerKind = "Service Worker";
     const reg = await registerServiceWorker();
     const serviceWorker = findServiceWorker(reg);
-    onMessageTarget = navigator.serviceWorker;
-    w = serviceWorker;
-    await runBenchmarks(w, workerKind, onMessageTarget);
+    await runBenchmarks(serviceWorker, workerKind, navigator.serviceWorker);
   }
 
   log("-----------------------------------------------");
@@ -157,9 +139,7 @@ async function main() {
     // Worker;
     const workerKind = "Worker";
     const worker = new Worker("worker.js");
-    onMessageTarget = worker;
-    w = worker;
-    await runBenchmarks(w, workerKind, onMessageTarget);
+    await runBenchmarks(worker, workerKind, worker);
   }
 
   log("-----------------------------------------------");
@@ -169,9 +149,7 @@ async function main() {
       // SharedWorker
       const workerKind = "Shared Worker";
       let sharedWorker = new SharedWorker("worker.js");
-      onMessageTarget = sharedWorker.port;
-      w = sharedWorker.port;
-      await runBenchmarks(w, workerKind, onMessageTarget);
+      await runBenchmarks(sharedWorker.port, workerKind, sharedWorker.port);
     } else {
       log("No SharedWorker");
     }
