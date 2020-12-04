@@ -52,67 +52,16 @@ function randomString(len) {
   return new TextDecoder("ascii").decode(arr);
 }
 
-function addAsync(name, fn) {
-  suite.add(
-    name,
-    async (deferred) => {
-      for (let i = 0; i < 100; i++) {
-        await fn();
-      }
-      deferred.resolve();
-    },
-    {
-      defer: true,
-    },
-  );
+function getResolver() {
+  let resolve;
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return {promise, resolve};
 }
 
-const suite = new Benchmark.Suite();
-
-addAsync("Send number", async () => {
-  (await send(w, 123)) !== undefined;
-});
-const s = randomString(1024);
-addAsync("Send string 1024", async () => {
-  (await send(w, s)) !== undefined;
-});
-addAsync("Send object", async () => {
-  (await send(w, {
-    dbName: "default",
-    rpc: "put",
-    args: {transactionId: 123, key: "abcdef", value: "ghijkl"},
-  })) !== undefined;
-});
-addAsync("Send array size 1024", async () => {
-  (await send(
-    w,
-    Array.from({length: 1024}, (v, i) => i),
-  )) !== undefined;
-});
-addAsync("Send binary array size 1024", async () => {
-  (await send(w, new Uint8Array(1024))) !== undefined;
-});
-addAsync("Send array bufer size 1024", async () => {
-  const ab = new ArrayBuffer(1024);
-  (await send(w, ab)) !== undefined;
-});
-addAsync("Send binary array size 1024 transfer", async () => {
-  const ab = new ArrayBuffer(1024);
-  (await send(w, ab, ab)) !== undefined;
-});
-
-suite.on("cycle", (event) => {
-  log(String(event.target));
-});
-suite.on("complete", (event) => {
-  log("Done.");
-});
-
-async function main() {
-  const reg = await registerServiceWorker();
-  w = findServiceWorker(reg);
-  // w = new Worker("worker.js");
-  navigator.serviceWorker.onmessage = (e) => {
+async function runBenchmarks(w, workerKind, onMessageTarget) {
+  onMessageTarget.onmessage = (e) => {
     const id = e.data[0];
     const value = e.data[1];
     const callback = callbacks.get(id);
@@ -122,9 +71,111 @@ async function main() {
     }
   };
 
+  const suite = new Benchmark.Suite();
+
+  function addAsync(name, fn) {
+    suite.add(
+      name,
+      async (deferred) => {
+        for (let i = 0; i < 100; i++) {
+          await fn();
+        }
+        deferred.resolve();
+      },
+      {
+        defer: true,
+      },
+    );
+  }
+
+  addAsync("Send number", async () => {
+    (await send(w, 123)) !== undefined;
+  });
+  const s = randomString(1024);
+  addAsync("Send string 1024", async () => {
+    (await send(w, s)) !== undefined;
+  });
+  addAsync("Send object", async () => {
+    (await send(w, {
+      dbName: "default",
+      rpc: "put",
+      args: {transactionId: 123, key: "abcdef", value: "ghijkl"},
+    })) !== undefined;
+  });
+  addAsync("Send array size 1024", async () => {
+    (await send(
+      w,
+      Array.from({length: 1024}, (v, i) => i),
+    )) !== undefined;
+  });
+  addAsync("Send binary array size 1024", async () => {
+    (await send(w, new Uint8Array(1024))) !== undefined;
+  });
+  addAsync("Send array bufer size 1024", async () => {
+    const ab = new ArrayBuffer(1024);
+    (await send(w, ab)) !== undefined;
+  });
+  addAsync("Send binary array size 1024 transfer", async () => {
+    const ab = new ArrayBuffer(1024);
+    (await send(w, ab, ab)) !== undefined;
+  });
+
   await send(w, 1);
-  log("Worker up and functional. Running perf tests...");
+  log(`${workerKind} up and functional. Running perf tests...`);
+
+  suite.on("cycle", (event) => {
+    log(String(event.target));
+  });
+
+  const {promise, resolve} = getResolver();
+
+  suite.on("complete", (event) => {
+    log("Done.");
+    resolve();
+  });
   suite.run();
+
+  await promise;
+}
+
+async function main() {
+  let onMessageTarget;
+
+  // Service worker
+  {
+    const workerKind = "Service Worker";
+    const reg = await registerServiceWorker();
+    const serviceWorker = findServiceWorker(reg);
+    onMessageTarget = navigator.serviceWorker;
+    w = serviceWorker;
+    await runBenchmarks(w, workerKind, onMessageTarget);
+  }
+
+  log("-----------------------------------------------");
+
+  {
+    // Worker;
+    const workerKind = "Worker";
+    const worker = new Worker("worker.js");
+    onMessageTarget = worker;
+    w = worker;
+    await runBenchmarks(w, workerKind, onMessageTarget);
+  }
+
+  log("-----------------------------------------------");
+
+  {
+    if (typeof SharedWorker !== "undefined") {
+      // SharedWorker
+      const workerKind = "Shared Worker";
+      let sharedWorker = new SharedWorker("worker.js");
+      onMessageTarget = sharedWorker.port;
+      w = sharedWorker.port;
+      await runBenchmarks(w, workerKind, onMessageTarget);
+    } else {
+      log("No SharedWorker");
+    }
+  }
 }
 
 main();
