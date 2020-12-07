@@ -3,7 +3,8 @@ const SCOPE = new URL("./echo-sw/", import.meta.url) + "";
 
 /**
  * @param {ServiceWorkerRegistration} reg
- * @returns {ServiceWorker | undefined} */
+ * @returns {ServiceWorker | undefined}
+ */
 function findServiceWorker(reg) {
   let sw;
   for (sw of [reg.active, reg.installing, reg.waiting]) {
@@ -22,17 +23,15 @@ function registerServiceWorker() {
   });
 }
 
-function send(worker, msg, transferable) {
-  return new Promise((resolve, reject) => {
+function send(port, msg, transferable) {
+  return new Promise((resolve) => {
     const {port1, port2} = new MessageChannel();
     port1.onmessage = (e) => {
       resolve(e.data);
     };
-    worker.postMessage(msg, transferable ? [port2, transferable] : [port2]);
+    port.postMessage(msg, transferable ? [port2, transferable] : [port2]);
   });
 }
-
-const valSize = 1024;
 
 function randomString(len) {
   const arr = new Uint8Array(len);
@@ -58,7 +57,7 @@ function getResolver() {
 
 const ITERATIONS = 100;
 
-async function runBenchmarks(w, workerKind, onMessageTarget) {
+async function runBenchmarks(w, workerKind) {
   const suite = new Benchmark.Suite();
 
   function addAsync(name, fn) {
@@ -118,7 +117,7 @@ async function runBenchmarks(w, workerKind, onMessageTarget) {
 
   const {promise, resolve} = getResolver();
 
-  suite.on("complete", (event) => {
+  suite.on("complete", () => {
     log("Done.");
     resolve();
   });
@@ -128,34 +127,35 @@ async function runBenchmarks(w, workerKind, onMessageTarget) {
 }
 
 async function main() {
-  // Service worker
   {
     const workerKind = "Service Worker";
     const reg = await registerServiceWorker();
     const serviceWorker = findServiceWorker(reg);
-    await runBenchmarks(serviceWorker, workerKind, navigator.serviceWorker);
-  }
-
-  log("-----------------------------------------------");
-
-  {
-    // Worker;
-    const workerKind = "Worker";
-    const worker = new Worker("worker.js");
-    await runBenchmarks(worker, workerKind, worker);
+    const {port1, port2} = new MessageChannel();
+    await send(serviceWorker, "setup", port2);
+    await runBenchmarks(port1, workerKind);
   }
 
   log("-----------------------------------------------");
 
   {
     if (typeof SharedWorker !== "undefined") {
-      // SharedWorker
       const workerKind = "Shared Worker";
-      let sharedWorker = new SharedWorker("worker.js");
-      await runBenchmarks(sharedWorker.port, workerKind, sharedWorker.port);
+      const {port} = new SharedWorker("worker.js");
+      await runBenchmarks(port, workerKind);
     } else {
       log("No SharedWorker");
     }
+  }
+
+  log("-----------------------------------------------");
+
+  {
+    const workerKind = "Dedicated Worker";
+    const worker = new Worker("worker.js");
+    const {port1, port2} = new MessageChannel();
+    await send(worker, "setup", port2);
+    await runBenchmarks(port1, workerKind);
   }
 }
 

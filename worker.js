@@ -6,7 +6,7 @@ if (
     e.ports[0].onmessage = handleOnMessage;
   };
 } else {
-  self.onmessage = handleOnMessage;
+  self.addEventListener("message", setup);
 }
 
 function handleOnMessage(e) {
@@ -16,4 +16,12 @@ function handleOnMessage(e) {
   } else {
     e.ports[0].postMessage(data);
   }
+}
+
+function setup(e) {
+  if (e.data !== "setup") {
+    throw new Error("expected a setup message");
+  }
+  e.ports[1].onmessage = handleOnMessage;
+  e.ports[0].postMessage(true);
 }
