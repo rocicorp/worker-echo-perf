@@ -27,6 +27,7 @@ function setup(e) {
     case "DedicatedWorker":
       self.removeEventListener("message", setup);
       self.onmessage = handleOnMessage;
+      break;
     default:
       throw new Error("Unexpected setup message: " + e.data.setup);
   }
