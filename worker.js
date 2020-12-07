@@ -19,9 +19,16 @@ function handleOnMessage(e) {
 }
 
 function setup(e) {
-  if (e.data !== "setup") {
-    throw new Error("expected a setup message");
+  switch (e.data.setup) {
+    case "ServiceWorker":
+    case "DedicatedWorkerMessageChannel":
+      e.ports[1].onmessage = handleOnMessage;
+      break;
+    case "DedicatedWorker":
+      self.removeEventListener("message", setup);
+      self.onmessage = handleOnMessage;
+    default:
+      throw new Error("Unexpected setup message: " + e.data.setup);
   }
-  e.ports[1].onmessage = handleOnMessage;
   e.ports[0].postMessage(true);
 }

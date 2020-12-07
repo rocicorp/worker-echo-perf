@@ -132,7 +132,7 @@ async function main() {
     const reg = await registerServiceWorker();
     const serviceWorker = findServiceWorker(reg);
     const {port1, port2} = new MessageChannel();
-    await send(serviceWorker, "setup", port2);
+    await send(serviceWorker, {setup: "ServiceWorker"}, port2);
     await runBenchmarks(port1, workerKind);
   }
 
@@ -151,17 +151,25 @@ async function main() {
   log("-----------------------------------------------");
 
   {
-    const workerKind = "Dedicated Worker";
+    const workerKind = "Dedicated Worker (with MessageChannel)";
     const worker = new Worker("worker.js");
     const {port1, port2} = new MessageChannel();
-    await send(worker, "setup", port2);
+    await send(worker, {setup: "DedicatedWorkerMessageChannel"}, port2);
     await runBenchmarks(port1, workerKind);
+  }
+
+  log("-----------------------------------------------");
+
+  {
+    const workerKind = "Dedicated Worker";
+    const worker = new Worker("worker.js");
+    await send(worker, {setup: "DedicatedWorker"});
+    await runBenchmarks(worker, workerKind);
   }
 }
 
 main();
 
 function log(s) {
-  document.body.append(s);
-  document.body.append(document.createElement("br"));
+  document.body.append(s, document.createElement("br"));
 }
