@@ -18,9 +18,27 @@ function handleOnMessage(e) {
   }
 }
 
+const resolvers = new Map();
+let resolveCounter = 0;
+
+function getResolver() {
+  let resolve;
+  let promise = new Promise((res) => {
+    resolve = res;
+  });
+  return {promise, resolve};
+}
+
 function setup(e) {
   switch (e.data.setup) {
-    case "ServiceWorker":
+    case "ServiceWorker": {
+      const {promise, resolve} = getResolver();
+      e.waitUntil(promise);
+      const id = resolveCounter++;
+      resolvers.set(id, resolve);
+      e.ports[0].postMessage(id);
+      // Fall through.
+    }
     case "DedicatedWorkerMessageChannel":
       e.ports[1].onmessage = handleOnMessage;
       break;
@@ -28,6 +46,13 @@ function setup(e) {
       self.removeEventListener("message", setup);
       self.onmessage = handleOnMessage;
       break;
+    case "ServiceWorkerWaitDone": {
+      const {id} = e.data;
+      const resolve = resolvers.get(id);
+      resolve();
+      break;
+    }
+
     default:
       throw new Error("Unexpected setup message: " + e.data.setup);
   }

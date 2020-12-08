@@ -132,8 +132,9 @@ async function main() {
     const reg = await registerServiceWorker();
     const serviceWorker = findServiceWorker(reg);
     const {port1, port2} = new MessageChannel();
-    await send(serviceWorker, {setup: "ServiceWorker"}, port2);
+    const id = await send(serviceWorker, {setup: "ServiceWorker"}, port2);
     await runBenchmarks(port1, workerKind);
+    await send(serviceWorker, {setup: "ServiceWorkerWaitDone", id});
   }
 
   log("-----------------------------------------------");
